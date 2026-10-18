@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -37,5 +38,65 @@ export class CashboxService {
         balance: (totalIn - totalOut).toString(),
       };
     });
+  }
+
+  /**
+   * Journal d'une caisse, du plus ancien au plus récent, avec le solde après
+   * chaque écriture. Visible de tous les membres (transparence).
+   */
+  async journal(groupId: string, userId: string, cashboxId: string) {
+    await this.groups.requireMembership(groupId, userId);
+    const cashbox = await this.prisma.cashbox.findFirst({
+      where: { id: cashboxId, groupId },
+    });
+    if (!cashbox) throw new NotFoundException('Caisse introuvable.');
+
+    const movements = await this.prisma.movement.findMany({
+      where: { cashboxId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    let balance = 0n;
+    const entries = movements.map((m) => {
+      balance += m.direction === 'IN' ? m.amount : -m.amount;
+      return {
+        id: m.id,
+        createdAt: m.createdAt,
+        direction: m.direction,
+        amount: m.amount.toString(),
+        category: m.category,
+        label: m.label,
+        authorId: m.authorId,
+        approvedById: m.approvedById,
+        paymentId: m.paymentId,
+        expenseId: m.expenseId,
+        reversalOfId: m.reversalOfId,
+        reason: m.reason,
+        balanceAfter: balance.toString(),
+      };
+    });
+    return {
+      cashbox: { id: cashbox.id, kind: cashbox.kind, name: cashbox.name },
+      balance: balance.toString(),
+      entries,
+    };
+  }
+
+  /**
+   * Verrouille la caisse jusqu'à la fin de la transaction et renvoie son
+   * solde : deux dépenses simultanées ne peuvent pas la mettre à découvert.
+   */
+  async lockAndGetBalance(
+    tx: Prisma.TransactionClient,
+    cashboxId: string,
+  ): Promise<bigint> {
+    await tx.$queryRaw`SELECT id FROM "Cashbox" WHERE id = ${cashboxId} FOR UPDATE`;
+    const sums = await tx.movement.groupBy({
+      by: ['direction'],
+      where: { cashboxId },
+      _sum: { amount: true },
+    });
+    const sum = (direction: 'IN' | 'OUT') =>
+      sums.find((s) => s.direction === direction)?._sum.amount ?? 0n;
+    return sum('IN') - sum('OUT');
   }
 }

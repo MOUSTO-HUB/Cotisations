@@ -49,6 +49,9 @@ npm run lint
 - Montants dans l'API : toujours des chaînes d'entiers (`"50000"`), via `AMOUNT_PATTERN` / `parseAmount` (`src/common/money.ts`).
 - Dates d'échéance : chaînes `AAAA-MM-JJ` manipulées avec `src/common/calendar.ts` (`toDbDate` / `fromDbDate` pour les colonnes `@db.Date`). Le statut « en retard » et la confirmation automatique après 7 jours se calculent à la lecture, rien n'est stocké.
 - Saisie de paiement : clé d'idempotence obligatoire, verrou `SELECT … FOR UPDATE` sur les échéances, compteur de reçus par groupe incrémenté dans la transaction.
+- Migrations : `npx prisma migrate dev --name <nom>` ; si Prisma refuse (« non-interactive », à cause d'un avertissement), générer le SQL avec `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` dans `prisma/migrations/<horodatage>_<nom>/migration.sql`, le relire (aucun DROP sans accord), puis `npx prisma migrate deploy` et `npx prisma generate`.
+- Configuration commune de l'API (validation, filtre d'erreurs Prisma) dans `src/app.setup.ts` (`configureApp`), utilisée par `main.ts` et les tests e2e.
+- Règles financières d'un groupe (délai de grâce, seuil de double validation) : `readGroupRules` dans `src/groups/domain/group-rules.ts`, jamais lues directement depuis le JSON.
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
@@ -58,7 +61,7 @@ npm run lint
 3. Comptes : inscription par téléphone + OTP (SMS simulé en développement), profil, PIN, déconnexion. ✅
 4. Groupes, membres et rôles (invitation, membres sans smartphone, au moins un président, audit). ✅
 5. Cotisations, échéances, paiements en espèces, reçus, confirmation / contestation, annulation par contre-écriture, solde des caisses. ✅
-6. Caisses, mouvements, double validation, journal d'audit.
+6. Caisses, mouvements, double validation, journal d'audit (dépenses, seuil par groupe, justificatifs, contre-écritures, consultation de l'audit). ✅
 7. Projets budgétés et collectes de solidarité.
 8. Application mobile Flutter.
 9. Paiement Mobile Money (après choix de la société de paiement, section 15).

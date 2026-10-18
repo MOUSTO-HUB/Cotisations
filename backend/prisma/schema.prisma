@@ -113,6 +113,13 @@ enum ProjectStatus {
   CANCELLED
 }
 
+enum ExpenseStatus {
+  PENDING_APPROVAL // au-delà du seuil, attend un second validateur (RG-D1)
+  EXECUTED
+  REJECTED
+  REVERSED
+}
+
 enum CampaignStatus {
   OPEN
   CLOSED
@@ -178,6 +185,7 @@ model Group {
   cycles         TontineCycle[]
   projects       Project[]
   campaigns      SolidarityCampaign[]
+  expenses       Expense[]
   auditLogs      AuditLog[]
 }
 
@@ -208,6 +216,7 @@ model Cashbox {
   group     Group               @relation(fields: [groupId], references: [id])
   movements Movement[]
   plans     ContributionPlan[]
+  expenses  Expense[]
   project   Project?
   campaign  SolidarityCampaign?
 }
@@ -224,14 +233,41 @@ model Movement {
   authorId     String
   receiptUrl   String?
   paymentId    String?           @unique
+  expenseId    String?           @unique
   reversalOfId String?           @unique
   reason       String?
   approvedById String? // second validateur (RG-D1)
   createdAt    DateTime          @default(now())
   cashbox      Cashbox           @relation(fields: [cashboxId], references: [id])
   payment      Payment?          @relation(fields: [paymentId], references: [id])
+  expense      Expense?          @relation(fields: [expenseId], references: [id])
   reversalOf   Movement?         @relation("Reversal", fields: [reversalOfId], references: [id])
   reversedBy   Movement?         @relation("Reversal")
+}
+
+/// Demande de dépense. L'écriture de caisse (Movement OUT) n'est créée
+/// qu'à l'exécution : directement sous le seuil, après validation au-delà.
+model Expense {
+  id               String        @id @default(uuid())
+  groupId          String
+  cashboxId        String
+  amount           BigInt
+  category         String
+  label            String
+  justificationUrl String? // sans justificatif : « à justifier » (RG-D2)
+  status           ExpenseStatus
+  requestedById    String
+  approvedById     String?
+  rejectionReason  String?
+  reversalReason   String?
+  idempotencyKey   String        @unique
+  createdAt        DateTime      @default(now())
+  decidedAt        DateTime?
+  group            Group         @relation(fields: [groupId], references: [id])
+  cashbox          Cashbox       @relation(fields: [cashboxId], references: [id])
+  movement         Movement?
+
+  @@index([groupId, createdAt])
 }
 
 // ---------- Cotisations ----------

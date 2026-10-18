@@ -22,9 +22,11 @@ import {
   normalizePhone,
 } from '../common/phone';
 import { PrismaService } from '../prisma/prisma.service';
+import { readGroupRules, serializeGroupRules } from './domain/group-rules';
 import { hasPermission, Permission } from './domain/permissions';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateRulesDto } from './dto/update-rules.dto';
 
 const TIMEZONE_BY_COUNTRY: Record<string, string> = {
   GN: 'Africa/Conakry',
@@ -316,6 +318,54 @@ export class GroupsService {
         },
         tx,
       );
+    });
+  }
+
+  /** Règles financières du groupe, avec les valeurs par défaut appliquées. */
+  async getRules(groupId: string, userId: string) {
+    await this.requireMembership(groupId, userId);
+    const group = await this.prisma.group.findUniqueOrThrow({
+      where: { id: groupId },
+    });
+    return serializeGroupRules(readGroupRules(group.rules, group.currency));
+  }
+
+  /** Le président modifie les règles ; l'ancienne et la nouvelle valeur sont auditées. */
+  async updateRules(groupId: string, actor: User, dto: UpdateRulesDto) {
+    await this.requireMembership(groupId, actor.id, {
+      permission: 'group.update',
+    });
+    return this.prisma.$transaction(async (tx) => {
+      const group = await tx.group.findUniqueOrThrow({
+        where: { id: groupId },
+      });
+      const before = readGroupRules(group.rules, group.currency);
+      const after = {
+        graceDays: dto.graceDays ?? before.graceDays,
+        expenseApprovalThreshold:
+          dto.expenseApprovalThreshold !== undefined
+            ? BigInt(dto.expenseApprovalThreshold)
+            : before.expenseApprovalThreshold,
+      };
+      await tx.group.update({
+        where: { id: groupId },
+        data: { rules: serializeGroupRules(after) },
+      });
+      await this.audit.log(
+        {
+          groupId,
+          actorId: actor.id,
+          action: 'group.rules_changed',
+          entity: 'Group',
+          entityId: groupId,
+          data: {
+            before: serializeGroupRules(before),
+            after: serializeGroupRules(after),
+          },
+        },
+        tx,
+      );
+      return serializeGroupRules(after);
     });
   }
 

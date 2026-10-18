@@ -6,11 +6,10 @@ import {
   nthOccurrence,
   type Periodicity,
 } from '../../common/calendar';
+import { DEFAULT_GRACE_DAYS } from '../../groups/domain/group-rules';
 
 /** Nombre maximal d'échéances générées pour un plan (ex. 1 an de quotidien). */
 export const MAX_OCCURRENCES = 400;
-/** Délai de grâce par défaut avant qu'une échéance passe « en retard » (RG-P1). */
-export const DEFAULT_GRACE_DAYS = 3;
 
 export class ContributionRuleError extends Error {
   constructor(message: string) {

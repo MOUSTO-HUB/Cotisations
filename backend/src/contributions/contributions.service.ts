@@ -4,15 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Due, Group, User } from '@prisma/client';
+import { Due, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { fromDbDate, isValidDate, todayIn, toDbDate } from '../common/calendar';
 import { parseAmount } from '../common/money';
+import { readGroupRules } from '../groups/domain/group-rules';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ContributionRuleError,
-  DEFAULT_GRACE_DAYS,
   displayedStatus,
   generateDueDates,
 } from './domain/contribution-rules';
@@ -153,7 +153,7 @@ export class ContributionsService {
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     });
     const today = todayIn(group.timezone);
-    const graceDays = graceDaysOf(group);
+    const { graceDays } = readGroupRules(group.rules, group.currency);
     return dues.map((d) => ({
       id: d.id,
       membershipId: d.membershipId,
@@ -226,13 +226,6 @@ export class ContributionsService {
       return { id: updated.id, status: updated.status };
     });
   }
-}
-
-export function graceDaysOf(group: Group): number {
-  const rules = group.rules as { graceDays?: unknown } | null;
-  return typeof rules?.graceDays === 'number'
-    ? rules.graceDays
-    : DEFAULT_GRACE_DAYS;
 }
 
 function storedDueStatus(due: Due) {

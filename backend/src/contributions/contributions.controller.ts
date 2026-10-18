@@ -9,7 +9,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { type AuthContext, CurrentAuth } from '../auth/auth-context';
-import { CashboxService } from '../cashbox/cashbox.service';
 import { ContributionsService } from './contributions.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { ReasonDto } from './dto/reason.dto';
@@ -23,7 +22,6 @@ export class ContributionsController {
   constructor(
     private readonly contributions: ContributionsService,
     private readonly payments: PaymentsService,
-    private readonly cashbox: CashboxService,
   ) {}
 
   // ---- Cotisations et échéances ----
@@ -137,15 +135,5 @@ export class ContributionsController {
     @Body() dto: ReasonDto,
   ) {
     return this.payments.reverse(groupId, auth.user, paymentId, dto.reason);
-  }
-
-  // ---- Caisses ----
-
-  @Get('cashboxes')
-  cashboxes(
-    @CurrentAuth() auth: AuthContext,
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-  ) {
-    return this.cashbox.balances(groupId, auth.user.id);
   }
 }

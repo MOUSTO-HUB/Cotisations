@@ -1,9 +1,10 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomInt } from 'node:crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/app.setup';
 import { SmsSender } from '../src/auth/sms/sms-sender';
 
 /** Capture les SMS au lieu de les envoyer, pour lire le code dans les tests. */
@@ -40,9 +41,7 @@ export async function createTestApp() {
     .useValue(sms)
     .compile();
   const app: INestApplication<App> = moduleRef.createNestApplication();
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
-  );
+  configureApp(app);
   await app.init();
   return { app, sms };
 }

@@ -13,6 +13,7 @@ import { type AuthContext, CurrentAuth } from '../auth/auth-context';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member.dto';
+import { UpdateRulesDto } from './dto/update-rules.dto';
 import { GroupsService } from './groups.service';
 
 @Controller('groups')
@@ -36,6 +37,23 @@ export class GroupsController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
   ) {
     return this.groups.get(groupId, auth.user.id);
+  }
+
+  @Get(':groupId/rules')
+  getRules(
+    @CurrentAuth() auth: AuthContext,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.groups.getRules(groupId, auth.user.id);
+  }
+
+  @Patch(':groupId/rules')
+  updateRules(
+    @CurrentAuth() auth: AuthContext,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: UpdateRulesDto,
+  ) {
+    return this.groups.updateRules(groupId, auth.user, dto);
   }
 
   @Get(':groupId/members')
