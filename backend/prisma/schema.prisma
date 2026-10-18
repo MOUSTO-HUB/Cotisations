@@ -67,8 +67,9 @@ enum PaymentChannel {
 enum PaymentStatus {
   PENDING_CONFIRMATION // espèces saisies par le trésorier (RG-C1)
   CONFIRMED
+  DISPUTED // contesté par le membre, à régler par le bureau
   FAILED
-  REVERSED
+  REVERSED // annulé par contre-écriture (RG-C4)
 }
 
 enum MovementDirection {
@@ -160,22 +161,24 @@ model Session {
 }
 
 model Group {
-  id          String               @id @default(uuid())
-  type        GroupType
-  name        String
-  currency    Currency             @default(GNF)
-  timezone    String               @default("Africa/Conakry")
-  rules       Json                 @default("{}") // seuils, pénalités, délai de grâce…
-  archived    Boolean              @default(false)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  memberships Membership[]
-  cashboxes   Cashbox[]
-  plans       ContributionPlan[]
-  cycles      TontineCycle[]
-  projects    Project[]
-  campaigns   SolidarityCampaign[]
-  auditLogs   AuditLog[]
+  id             String               @id @default(uuid())
+  type           GroupType
+  name           String
+  currency       Currency             @default(GNF)
+  timezone       String               @default("Africa/Conakry")
+  rules          Json                 @default("{}") // seuils, pénalités, délai de grâce…
+  archived       Boolean              @default(false)
+  /// Dernier numéro de reçu attribué dans ce groupe.
+  receiptCounter Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  memberships    Membership[]
+  cashboxes      Cashbox[]
+  plans          ContributionPlan[]
+  cycles         TontineCycle[]
+  projects       Project[]
+  campaigns      SolidarityCampaign[]
+  auditLogs      AuditLog[]
 }
 
 model Membership {
@@ -204,6 +207,7 @@ model Cashbox {
   name      String
   group     Group               @relation(fields: [groupId], references: [id])
   movements Movement[]
+  plans     ContributionPlan[]
   project   Project?
   campaign  SolidarityCampaign?
 }
@@ -235,6 +239,7 @@ model Movement {
 model ContributionPlan {
   id           String       @id @default(uuid())
   groupId      String
+  cashboxId    String
   name         String
   amount       BigInt
   periodicity  Periodicity?
@@ -243,37 +248,58 @@ model ContributionPlan {
   endDate      DateTime?    @db.Date
   createdAt    DateTime     @default(now())
   group        Group        @relation(fields: [groupId], references: [id])
+  cashbox      Cashbox      @relation(fields: [cashboxId], references: [id])
   dues         Due[]
+  payments     Payment[]
 }
 
 model Due {
-  id           String            @id @default(uuid())
+  id           String              @id @default(uuid())
   membershipId String
   planId       String?
   roundId      String?
   amountDue    BigInt
-  amountPaid   BigInt            @default(0)
-  dueDate      DateTime          @db.Date
-  status       DueStatus         @default(PENDING)
-  membership   Membership        @relation(fields: [membershipId], references: [id])
-  plan         ContributionPlan? @relation(fields: [planId], references: [id])
-  round        TontineRound?     @relation(fields: [roundId], references: [id])
+  amountPaid   BigInt              @default(0)
+  dueDate      DateTime            @db.Date
+  status       DueStatus           @default(PENDING)
+  exemptReason String?
+  membership   Membership          @relation(fields: [membershipId], references: [id])
+  plan         ContributionPlan?   @relation(fields: [planId], references: [id])
+  round        TontineRound?       @relation(fields: [roundId], references: [id])
+  allocations  PaymentAllocation[]
+
+  @@index([membershipId, dueDate])
 }
 
 model Payment {
-  id                String         @id @default(uuid())
+  id                String              @id @default(uuid())
   membershipId      String
+  planId            String?
   amount            BigInt
   channel           PaymentChannel
   status            PaymentStatus
-  operatorReference String?        @unique
-  idempotencyKey    String         @unique
-  receiptNumber     String         @unique
+  operatorReference String?             @unique
+  idempotencyKey    String              @unique
+  receiptNumber     String              @unique
   recordedById      String
-  createdAt         DateTime       @default(now())
+  createdAt         DateTime            @default(now())
   confirmedAt       DateTime?
-  membership        Membership     @relation(fields: [membershipId], references: [id])
+  disputeReason     String?
+  reversalReason    String?
+  membership        Membership          @relation(fields: [membershipId], references: [id])
+  plan              ContributionPlan?   @relation(fields: [planId], references: [id])
   movement          Movement?
+  allocations       PaymentAllocation[]
+}
+
+/// Part d'un paiement imputée à une échéance (RG-C2).
+model PaymentAllocation {
+  id        String  @id @default(uuid())
+  paymentId String
+  dueId     String
+  amount    BigInt
+  payment   Payment @relation(fields: [paymentId], references: [id])
+  due       Due     @relation(fields: [dueId], references: [id])
 }
 
 // ---------- Tontine ----------

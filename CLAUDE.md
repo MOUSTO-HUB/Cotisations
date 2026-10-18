@@ -46,6 +46,9 @@ npm run lint
 - Numéros de téléphone toujours passés par `normalizePhone` (format E.164, Guinée par défaut).
 - Le SMS passe par l'abstraction `SmsSender` ; en développement, `ConsoleSmsSender` affiche le code dans la console de l'API.
 - Tests e2e : base dédiée `cotisations_test` (port 5433), jamais effacée ; chaque test crée ses propres données (numéros aléatoires). Ne jamais lancer `prisma migrate reset` ni supprimer de données sans l'accord explicite de l'utilisateur.
+- Montants dans l'API : toujours des chaînes d'entiers (`"50000"`), via `AMOUNT_PATTERN` / `parseAmount` (`src/common/money.ts`).
+- Dates d'échéance : chaînes `AAAA-MM-JJ` manipulées avec `src/common/calendar.ts` (`toDbDate` / `fromDbDate` pour les colonnes `@db.Date`). Le statut « en retard » et la confirmation automatique après 7 jours se calculent à la lecture, rien n'est stocké.
+- Saisie de paiement : clé d'idempotence obligatoire, verrou `SELECT … FOR UPDATE` sur les échéances, compteur de reçus par groupe incrémenté dans la transaction.
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
@@ -54,7 +57,7 @@ npm run lint
 2. Moteur de tontine : calendrier, pot, tours, date de fin, avec tests. ✅
 3. Comptes : inscription par téléphone + OTP (SMS simulé en développement), profil, PIN, déconnexion. ✅
 4. Groupes, membres et rôles (invitation, membres sans smartphone, au moins un président, audit). ✅
-5. Cotisations, échéances, paiements en espèces, reçus.
+5. Cotisations, échéances, paiements en espèces, reçus, confirmation / contestation, annulation par contre-écriture, solde des caisses. ✅
 6. Caisses, mouvements, double validation, journal d'audit.
 7. Projets budgétés et collectes de solidarité.
 8. Application mobile Flutter.
