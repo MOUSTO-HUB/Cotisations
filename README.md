@@ -18,7 +18,7 @@ npx prisma migrate dev
 npm run start:dev
 ```
 
-L'API répond sur http://localhost:3000 (point de santé : `GET /health`).
+L'API répond sur http://localhost:3400 (point de santé : `GET /health`).
 
 ## Structure
 

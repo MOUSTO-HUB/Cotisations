@@ -16,7 +16,7 @@ async function bootstrap() {
   app.enableCors();
   configureApp(app);
 
-  // Documentation interactive : http://localhost:3000/docs
+  // Documentation interactive : http://localhost:3400/docs
   const config = new DocumentBuilder()
     .setTitle('Cotisations API')
     .setDescription(
@@ -32,6 +32,6 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3400);
 }
 void bootstrap();

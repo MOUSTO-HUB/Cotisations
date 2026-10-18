@@ -18,7 +18,7 @@ docker compose up -d                 # démarre PostgreSQL (port 5433)
 cd backend
 npm install
 npx prisma migrate dev               # applique les migrations
-npm run start:dev                    # API sur http://localhost:3000, documentation interactive sur /docs
+npm run start:dev                    # API sur http://localhost:3400, documentation interactive sur /docs
 npm test                             # tests unitaires
 npm run test:e2e                     # tests bout en bout
 npm run lint
