@@ -1,0 +1,348 @@
+// Modèle de données — cahier des charges, section 8.
+// Règles : montants en BigInt (unités de la devise, sans centimes),
+// dates en UTC, écritures financières jamais supprimées (contre-écriture).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Énumérations ----------
+
+enum GroupType {
+  FAMILY
+  COMMUNITY
+  TONTINE
+}
+
+enum Currency {
+  GNF
+  XOF
+  XAF
+  EUR
+  USD
+}
+
+enum Role {
+  PRESIDENT
+  TREASURER
+  SECRETARY
+  AUDITOR
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  LEFT
+}
+
+enum Periodicity {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM_DAYS
+}
+
+enum DueStatus {
+  PENDING
+  PAID
+  PARTIAL
+  LATE
+  EXEMPT
+}
+
+enum PaymentChannel {
+  CASH
+  MOBILE_MONEY
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING_CONFIRMATION // espèces saisies par le trésorier (RG-C1)
+  CONFIRMED
+  FAILED
+  REVERSED
+}
+
+enum MovementDirection {
+  IN
+  OUT
+}
+
+enum CashboxKind {
+  GENERAL
+  SOLIDARITY
+  PROJECT
+}
+
+enum BeneficiaryOrderMode {
+  FIXED
+  DRAW
+  AUCTION
+}
+
+enum TontineCycleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum RoundStatus {
+  UPCOMING
+  COLLECTING
+  COMPLETE
+  PAID_OUT
+}
+
+enum ProjectStatus {
+  PROPOSED
+  BUDGETED
+  VOTED
+  COLLECTING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignStatus {
+  OPEN
+  CLOSED
+  PAID_OUT
+}
+
+// ---------- Utilisateurs et groupes ----------
+
+model User {
+  id                String       @id @default(uuid())
+  phone             String       @unique // format E.164, ex. +224620000000
+  fullName          String
+  pinHash           String?
+  language          String       @default("fr")
+  country           String       @default("GN")
+  mobileMoneyNumber String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  memberships       Membership[]
+}
+
+model Group {
+  id          String               @id @default(uuid())
+  type        GroupType
+  name        String
+  currency    Currency             @default(GNF)
+  timezone    String               @default("Africa/Conakry")
+  rules       Json                 @default("{}") // seuils, pénalités, délai de grâce…
+  archived    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  memberships Membership[]
+  cashboxes   Cashbox[]
+  plans       ContributionPlan[]
+  cycles      TontineCycle[]
+  projects    Project[]
+  campaigns   SolidarityCampaign[]
+  auditLogs   AuditLog[]
+}
+
+model Membership {
+  id       String           @id @default(uuid())
+  userId   String
+  groupId  String
+  role     Role             @default(MEMBER)
+  category String? // résident, diaspora, retraité…
+  status   MembershipStatus @default(INVITED)
+  joinedAt DateTime         @default(now())
+  user     User             @relation(fields: [userId], references: [id])
+  group    Group            @relation(fields: [groupId], references: [id])
+  dues     Due[]
+  payments Payment[]
+  shares   TontineShare[]
+
+  @@unique([userId, groupId])
+}
+
+// ---------- Caisse et écritures ----------
+
+model Cashbox {
+  id        String              @id @default(uuid())
+  groupId   String
+  kind      CashboxKind
+  name      String
+  group     Group               @relation(fields: [groupId], references: [id])
+  movements Movement[]
+  project   Project?
+  campaign  SolidarityCampaign?
+}
+
+/// Écriture du journal de caisse. Jamais modifiée ni supprimée :
+/// une erreur s'annule par une contre-écriture (reversalOfId).
+model Movement {
+  id           String            @id @default(uuid())
+  cashboxId    String
+  direction    MovementDirection
+  amount       BigInt
+  category     String
+  label        String
+  authorId     String
+  receiptUrl   String?
+  paymentId    String?           @unique
+  reversalOfId String?           @unique
+  reason       String?
+  approvedById String? // second validateur (RG-D1)
+  createdAt    DateTime          @default(now())
+  cashbox      Cashbox           @relation(fields: [cashboxId], references: [id])
+  payment      Payment?          @relation(fields: [paymentId], references: [id])
+  reversalOf   Movement?         @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy   Movement?         @relation("Reversal")
+}
+
+// ---------- Cotisations ----------
+
+model ContributionPlan {
+  id           String       @id @default(uuid())
+  groupId      String
+  name         String
+  amount       BigInt
+  periodicity  Periodicity?
+  intervalDays Int?
+  startDate    DateTime     @db.Date
+  endDate      DateTime?    @db.Date
+  createdAt    DateTime     @default(now())
+  group        Group        @relation(fields: [groupId], references: [id])
+  dues         Due[]
+}
+
+model Due {
+  id           String            @id @default(uuid())
+  membershipId String
+  planId       String?
+  roundId      String?
+  amountDue    BigInt
+  amountPaid   BigInt            @default(0)
+  dueDate      DateTime          @db.Date
+  status       DueStatus         @default(PENDING)
+  membership   Membership        @relation(fields: [membershipId], references: [id])
+  plan         ContributionPlan? @relation(fields: [planId], references: [id])
+  round        TontineRound?     @relation(fields: [roundId], references: [id])
+}
+
+model Payment {
+  id                String         @id @default(uuid())
+  membershipId      String
+  amount            BigInt
+  channel           PaymentChannel
+  status            PaymentStatus
+  operatorReference String?        @unique
+  idempotencyKey    String         @unique
+  receiptNumber     String         @unique
+  recordedById      String
+  createdAt         DateTime       @default(now())
+  confirmedAt       DateTime?
+  membership        Membership     @relation(fields: [membershipId], references: [id])
+  movement          Movement?
+}
+
+// ---------- Tontine ----------
+
+model TontineCycle {
+  id                 String               @id @default(uuid())
+  groupId            String
+  contributionAmount BigInt
+  shareCount         Int
+  periodicity        Periodicity
+  intervalDays       Int?
+  startDate          DateTime             @db.Date
+  orderMode          BeneficiaryOrderMode
+  status             TontineCycleStatus   @default(DRAFT)
+  lockedAt           DateTime? // verrouillage après le premier versement
+  drawSeed           Json? // résultat du tirage archivé (RG-T4)
+  createdAt          DateTime             @default(now())
+  group              Group                @relation(fields: [groupId], references: [id])
+  shares             TontineShare[]
+  rounds             TontineRound[]
+}
+
+model TontineShare {
+  id           String         @id @default(uuid())
+  cycleId      String
+  membershipId String
+  fraction     Int            @default(100) // 100 = part entière, 50 = demi-part
+  cycle        TontineCycle   @relation(fields: [cycleId], references: [id])
+  membership   Membership     @relation(fields: [membershipId], references: [id])
+  rounds       TontineRound[]
+}
+
+model TontineRound {
+  id               String        @id @default(uuid())
+  cycleId          String
+  number           Int
+  dueDate          DateTime      @db.Date
+  potAmount        BigInt
+  beneficiaryId    String?
+  status           RoundStatus   @default(UPCOMING)
+  paidOutAt        DateTime?
+  receiptConfirmed Boolean       @default(false)
+  cycle            TontineCycle  @relation(fields: [cycleId], references: [id])
+  beneficiary      TontineShare? @relation(fields: [beneficiaryId], references: [id])
+  dues             Due[]
+
+  @@unique([cycleId, number])
+}
+
+// ---------- Projets et solidarité ----------
+
+model Project {
+  id           String        @id @default(uuid())
+  groupId      String
+  cashboxId    String        @unique
+  title        String
+  description  String
+  budget       Json          @default("[]") // postes : [{ label, amount }]
+  targetAmount BigInt
+  status       ProjectStatus @default(PROPOSED)
+  deadline     DateTime?     @db.Date
+  createdAt    DateTime      @default(now())
+  group        Group         @relation(fields: [groupId], references: [id])
+  cashbox      Cashbox       @relation(fields: [cashboxId], references: [id])
+}
+
+model SolidarityCampaign {
+  id              String         @id @default(uuid())
+  groupId         String
+  cashboxId       String         @unique
+  beneficiaryName String
+  reason          String // motif général uniquement, jamais de diagnostic
+  targetAmount    BigInt
+  suggestedAmount BigInt?
+  deadline        DateTime       @db.Date
+  status          CampaignStatus @default(OPEN)
+  openedById      String
+  createdAt       DateTime       @default(now())
+  group           Group          @relation(fields: [groupId], references: [id])
+  cashbox         Cashbox        @relation(fields: [cashboxId], references: [id])
+}
+
+// ---------- Audit ----------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  groupId   String?
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String
+  data      Json?
+  device    String?
+  createdAt DateTime @default(now())
+  group     Group?   @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, createdAt])
+}
