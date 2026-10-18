@@ -13,7 +13,7 @@ import {
   verifySecret,
 } from '../common/hashing';
 import {
-  COUNTRY_RULES,
+  countryOfPhone,
   InvalidPhoneError,
   normalizePhone,
 } from '../common/phone';
@@ -159,11 +159,4 @@ export class AuthService {
       throw error;
     }
   }
-}
-
-function countryOfPhone(phone: string): string {
-  for (const [country, rule] of Object.entries(COUNTRY_RULES)) {
-    if (phone.startsWith(`+${rule.dialCode}`)) return country;
-  }
-  return 'OTHER';
 }

@@ -1,56 +1,19 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import { randomInt } from 'node:crypto';
+import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
-import { SmsSender } from '../src/auth/sms/sms-sender';
-
-/** Capture les SMS au lieu de les envoyer, pour lire le code dans les tests. */
-class FakeSmsSender extends SmsSender {
-  readonly sent: { phone: string; message: string }[] = [];
-  send(phone: string, message: string) {
-    this.sent.push({ phone, message });
-    return Promise.resolve();
-  }
-  lastCode(): string {
-    const last = this.sent.at(-1);
-    const match = last && /\b(\d{6})\b/.exec(last.message);
-    if (!match) throw new Error('Aucun code envoyé');
-    return match[1];
-  }
-}
-
-interface VerifyBody {
-  token: string;
-  isNewUser: boolean;
-  user: { phone: string; fullName: string; country: string; hasPin: boolean };
-}
+import {
+  createTestApp,
+  FakeSmsSender,
+  randomPhone as nextPhone,
+  VerifyBody,
+} from './helpers';
 
 describe('Authentification (e2e)', () => {
   let app: INestApplication<App>;
   let sms: FakeSmsSender;
-  // Numéro guinéen aléatoire et unique par test : la base de test n'est jamais
-  // effacée, et la limite de demandes de code s'applique par numéro.
-  const used = new Set<string>();
-  const nextPhone = (): string => {
-    const phone = `62${String(randomInt(0, 10_000_000)).padStart(7, '0')}`;
-    if (used.has(phone)) return nextPhone();
-    used.add(phone);
-    return phone;
-  };
 
   beforeAll(async () => {
-    sms = new FakeSmsSender();
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(SmsSender)
-      .useValue(sms)
-      .compile();
-    app = moduleRef.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
-    );
-    await app.init();
+    ({ app, sms } = await createTestApp());
   });
 
   afterAll(async () => {

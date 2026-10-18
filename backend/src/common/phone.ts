@@ -69,3 +69,17 @@ export function normalizePhone(
   }
   return `+${digits}`;
 }
+
+/** Pays de lancement d'un numéro normalisé, ou 'OTHER' (diaspora). */
+export function countryOfPhone(phone: string): LaunchCountry | 'OTHER' {
+  for (const [country, rule] of Object.entries(COUNTRY_RULES)) {
+    if (phone.startsWith(`+${rule.dialCode}`)) {
+      return country as LaunchCountry;
+    }
+  }
+  return 'OTHER';
+}
+
+export function isLaunchCountry(country: string): country is LaunchCountry {
+  return country in COUNTRY_RULES;
+}

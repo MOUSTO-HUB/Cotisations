@@ -53,7 +53,7 @@ npm run lint
 1. Socle API : configuration, base, Docker, point de santé. ✅
 2. Moteur de tontine : calendrier, pot, tours, date de fin, avec tests. ✅
 3. Comptes : inscription par téléphone + OTP (SMS simulé en développement), profil, PIN, déconnexion. ✅
-4. Groupes, membres et rôles.
+4. Groupes, membres et rôles (invitation, membres sans smartphone, au moins un président, audit). ✅
 5. Cotisations, échéances, paiements en espèces, reçus.
 6. Caisses, mouvements, double validation, journal d'audit.
 7. Projets budgétés et collectes de solidarité.
