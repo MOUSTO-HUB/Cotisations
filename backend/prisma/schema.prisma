@@ -131,6 +131,32 @@ model User {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   memberships       Membership[]
+  sessions          Session[]
+}
+
+/// Code à usage unique envoyé par SMS. Le code n'est jamais stocké en clair.
+model OtpChallenge {
+  id         String    @id @default(uuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+}
+
+/// Session de connexion. Seule l'empreinte SHA-256 du jeton est stockée.
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  device    String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model Group {

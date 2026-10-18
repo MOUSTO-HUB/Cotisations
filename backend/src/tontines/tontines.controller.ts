@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import { Public } from '../auth/public.decorator';
 import { SimulateTontineDto } from './dto/simulate-tontine.dto';
 import {
   computeTontineSchedule,
@@ -11,6 +12,7 @@ export class TontinesController {
    * Simule une tontine avant sa création : pot, nombre de tours, date de fin
    * et calendrier. Les montants sont renvoyés en chaînes (entiers exacts).
    */
+  @Public()
   @Post('simulate')
   simulate(@Body() dto: SimulateTontineDto) {
     try {

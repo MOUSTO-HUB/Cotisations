@@ -41,13 +41,18 @@ npm run lint
 - La logique métier pure (calculs de tontine, imputation des paiements, pénalités) vit dans des fonctions sans dépendance à la base, testées unitairement. Les services NestJS orchestrent.
 - Validation des entrées avec `class-validator` sur les DTO.
 - Chaque nouvelle règle métier (RG-xx du cahier des charges) a au moins un test qui la nomme dans sa description.
+- Toutes les routes exigent une session (garde globale `AuthGuard`) ; une route publique se marque `@Public()`. L'utilisateur connecté s'obtient avec `@CurrentAuth()`.
+- Sessions : jeton opaque aléatoire (`Authorization: Bearer <jeton>`), seule son empreinte SHA-256 est stockée, révocable à la déconnexion. Pas de JWT.
+- Numéros de téléphone toujours passés par `normalizePhone` (format E.164, Guinée par défaut).
+- Le SMS passe par l'abstraction `SmsSender` ; en développement, `ConsoleSmsSender` affiche le code dans la console de l'API.
+- Tests e2e : base dédiée `cotisations_test` (port 5433), jamais effacée ; chaque test crée ses propres données (numéros aléatoires). Ne jamais lancer `prisma migrate reset` ni supprimer de données sans l'accord explicite de l'utilisateur.
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
 
 1. Socle API : configuration, base, Docker, point de santé. ✅
 2. Moteur de tontine : calendrier, pot, tours, date de fin, avec tests. ✅
-3. Comptes : inscription par téléphone + OTP (SMS simulé en développement).
+3. Comptes : inscription par téléphone + OTP (SMS simulé en développement), profil, PIN, déconnexion. ✅
 4. Groupes, membres et rôles.
 5. Cotisations, échéances, paiements en espèces, reçus.
 6. Caisses, mouvements, double validation, journal d'audit.
