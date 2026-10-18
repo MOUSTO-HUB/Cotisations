@@ -81,6 +81,15 @@ enum CashboxKind {
   GENERAL
   SOLIDARITY
   PROJECT
+  TONTINE
+}
+
+enum SwapStatus {
+  REQUESTED // demandé par le bénéficiaire d'un tour
+  ACCEPTED // accepté par le bénéficiaire de l'autre tour
+  APPROVED // validé par le président : les tours sont échangés
+  REJECTED
+  CANCELLED
 }
 
 enum BeneficiaryOrderMode {
@@ -234,6 +243,7 @@ model Cashbox {
   donations Donation[]
   project   Project?
   campaign  SolidarityCampaign?
+  tontine   TontineCycle?
 }
 
 /// Écriture du journal de caisse. Jamais modifiée ni supprimée :
@@ -366,6 +376,12 @@ model PaymentAllocation {
 model TontineCycle {
   id                 String               @id @default(uuid())
   groupId            String
+  cashboxId          String               @unique
+  name               String
+  createdById        String
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelReason       String?
   contributionAmount BigInt
   shareCount         Int
   periodicity        Periodicity
@@ -377,8 +393,10 @@ model TontineCycle {
   drawSeed           Json? // résultat du tirage archivé (RG-T4)
   createdAt          DateTime             @default(now())
   group              Group                @relation(fields: [groupId], references: [id])
+  cashbox            Cashbox              @relation(fields: [cashboxId], references: [id])
   shares             TontineShare[]
   rounds             TontineRound[]
+  swaps              TontineSwap[]
 }
 
 model TontineShare {
@@ -386,26 +404,50 @@ model TontineShare {
   cycleId      String
   membershipId String
   fraction     Int            @default(100) // 100 = part entière, 50 = demi-part
+  /// Numéro du tour où cette part reçoit le pot (ordre fixé ou tiré au sort).
+  turn         Int?
   cycle        TontineCycle   @relation(fields: [cycleId], references: [id])
   membership   Membership     @relation(fields: [membershipId], references: [id])
   rounds       TontineRound[]
 }
 
 model TontineRound {
-  id               String        @id @default(uuid())
-  cycleId          String
-  number           Int
-  dueDate          DateTime      @db.Date
-  potAmount        BigInt
-  beneficiaryId    String?
-  status           RoundStatus   @default(UPCOMING)
-  paidOutAt        DateTime?
-  receiptConfirmed Boolean       @default(false)
-  cycle            TontineCycle  @relation(fields: [cycleId], references: [id])
-  beneficiary      TontineShare? @relation(fields: [beneficiaryId], references: [id])
-  dues             Due[]
+  id                 String        @id @default(uuid())
+  cycleId            String
+  number             Int
+  dueDate            DateTime      @db.Date
+  potAmount          BigInt
+  beneficiaryId      String?
+  status             RoundStatus   @default(UPCOMING)
+  paidOutAt          DateTime?
+  paidOutById        String?
+  receiptConfirmed   Boolean       @default(false)
+  receiptConfirmedAt DateTime?
+  cycle              TontineCycle  @relation(fields: [cycleId], references: [id])
+  beneficiary        TontineShare? @relation(fields: [beneficiaryId], references: [id])
+  dues               Due[]
+  swapsAsA           TontineSwap[] @relation("SwapRoundA")
+  swapsAsB           TontineSwap[] @relation("SwapRoundB")
 
   @@unique([cycleId, number])
+}
+
+/// Échange de tours entre deux bénéficiaires : accord des deux, puis
+/// validation du président (section 4.4).
+model TontineSwap {
+  id            String       @id @default(uuid())
+  cycleId       String
+  roundAId      String
+  roundBId      String
+  status        SwapStatus   @default(REQUESTED)
+  requestedById String
+  acceptedById  String?
+  decidedById   String?
+  createdAt     DateTime     @default(now())
+  decidedAt     DateTime?
+  cycle         TontineCycle @relation(fields: [cycleId], references: [id])
+  roundA        TontineRound @relation("SwapRoundA", fields: [roundAId], references: [id])
+  roundB        TontineRound @relation("SwapRoundB", fields: [roundBId], references: [id])
 }
 
 // ---------- Projets et solidarité ----------

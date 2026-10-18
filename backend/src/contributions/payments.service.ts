@@ -50,16 +50,76 @@ export class PaymentsService {
     await this.groups.requireMembership(groupId, actor.id, {
       permission: 'finance.record',
     });
-    const amount = parseAmount(dto.amount);
+    const plan = await this.prisma.contributionPlan.findFirst({
+      where: { id: dto.planId, groupId },
+    });
+    if (!plan) throw new NotFoundException('Cotisation introuvable.');
+    return this.recordAllocated({
+      groupId,
+      actor,
+      membershipId: dto.membershipId,
+      amount: parseAmount(dto.amount),
+      idempotencyKey: dto.idempotencyKey,
+      planId: plan.id,
+      duesWhere: { planId: plan.id },
+      cashboxId: plan.cashboxId,
+      label: plan.name,
+    });
+  }
+
+  /**
+   * Versement d'un membre pour un tour de tontine (toutes ses parts du tour),
+   * mêmes garanties qu'une cotisation : reçu, idempotence, confirmation.
+   */
+  async recordTontineCash(
+    groupId: string,
+    actor: User,
+    params: {
+      membershipId: string;
+      roundId: string;
+      amount: bigint;
+      idempotencyKey: string;
+      cashboxId: string;
+      label: string;
+    },
+  ) {
+    await this.groups.requireMembership(groupId, actor.id, {
+      permission: 'finance.record',
+    });
+    return this.recordAllocated({
+      groupId,
+      actor,
+      membershipId: params.membershipId,
+      amount: params.amount,
+      idempotencyKey: params.idempotencyKey,
+      planId: null,
+      duesWhere: { roundId: params.roundId },
+      cashboxId: params.cashboxId,
+      label: params.label,
+    });
+  }
+
+  private async recordAllocated(params: {
+    groupId: string;
+    actor: User;
+    membershipId: string;
+    amount: bigint;
+    idempotencyKey: string;
+    planId: string | null;
+    duesWhere: Prisma.DueWhereInput;
+    cashboxId: string;
+    label: string;
+  }) {
+    const { groupId, actor, amount } = params;
 
     const existing = await this.prisma.payment.findUnique({
-      where: { idempotencyKey: dto.idempotencyKey },
+      where: { idempotencyKey: params.idempotencyKey },
       include: PAYMENT_INCLUDE,
     });
     if (existing) {
       const same =
-        existing.membershipId === dto.membershipId &&
-        existing.planId === dto.planId &&
+        existing.membershipId === params.membershipId &&
+        existing.planId === params.planId &&
         existing.amount === amount;
       if (!same) {
         throw new ConflictException(
@@ -70,23 +130,19 @@ export class PaymentsService {
     }
 
     const membership = await this.prisma.membership.findFirst({
-      where: { id: dto.membershipId, groupId, status: 'ACTIVE' },
+      where: { id: params.membershipId, groupId, status: 'ACTIVE' },
       include: { user: true },
     });
     if (!membership) throw new NotFoundException('Membre introuvable.');
-    const plan = await this.prisma.contributionPlan.findFirst({
-      where: { id: dto.planId, groupId },
-    });
-    if (!plan) throw new NotFoundException('Cotisation introuvable.');
 
     const payment = await this.prisma.$transaction(async (tx) => {
       // Verrouille les échéances du membre : deux saisies simultanées ne
       // peuvent pas imputer deux fois la même échéance.
-      await tx.$queryRaw`SELECT id FROM "Due" WHERE "membershipId" = ${membership.id} AND "planId" = ${plan.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "Due" WHERE "membershipId" = ${membership.id} FOR UPDATE`;
       const dues = await tx.due.findMany({
         where: {
+          ...params.duesWhere,
           membershipId: membership.id,
-          planId: plan.id,
           status: { in: ['PENDING', 'PARTIAL', 'LATE'] },
         },
         orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
@@ -107,11 +163,11 @@ export class PaymentsService {
       const created = await tx.payment.create({
         data: {
           membershipId: membership.id,
-          planId: plan.id,
+          planId: params.planId,
           amount,
           channel: 'CASH',
           status: 'PENDING_CONFIRMATION',
-          idempotencyKey: dto.idempotencyKey,
+          idempotencyKey: params.idempotencyKey,
           receiptNumber,
           recordedById: actor.id,
           allocations: { create: allocations },
@@ -127,11 +183,11 @@ export class PaymentsService {
       }
       await tx.movement.create({
         data: {
-          cashboxId: plan.cashboxId,
+          cashboxId: params.cashboxId,
           direction: 'IN',
           amount,
           category: 'contribution',
-          label: `${plan.name} — ${membership.user.fullName}`,
+          label: `${params.label} — ${membership.user.fullName}`,
           authorId: actor.id,
           paymentId: created.id,
         },
@@ -144,7 +200,7 @@ export class PaymentsService {
           entity: 'Payment',
           entityId: created.id,
           data: {
-            amount: dto.amount,
+            amount: amount.toString(),
             receiptNumber,
             membershipId: membership.id,
           },

@@ -8,5 +8,6 @@ import { PaymentsService } from './payments.service';
   imports: [GroupsModule],
   controllers: [ContributionsController],
   providers: [ContributionsService, PaymentsService],
+  exports: [PaymentsService],
 })
 export class ContributionsModule {}

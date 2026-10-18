@@ -69,7 +69,7 @@ npm run lint
 5. Cotisations, échéances, paiements en espèces, reçus, confirmation / contestation, annulation par contre-écriture, solde des caisses. ✅
 6. Caisses, mouvements, double validation, journal d'audit (dépenses, seuil par groupe, justificatifs, contre-écritures, consultation de l'audit). ✅
 7. Projets budgétés et collectes de solidarité (6 étapes, postes, part par membre, dons, jalons, reliquat, collectes avec second validateur, excédent). ✅
-7 bis. Tontine complète en base : création du cycle, tirage enregistré, versements de chaque tour, versement du pot et confirmation du bénéficiaire, ordre fixé / tirage / enchères, échanges de tour.
+7 bis. Tontine complète en base : création du cycle, tirage enregistré, versements de chaque tour, versement du pot et confirmation du bénéficiaire, ordre fixé / tirage / enchères, échanges de tour. ✅ (enchères, demi-parts, sortie anticipée et caution : plus tard)
 8. Application mobile Flutter.
 9. Paiement Mobile Money (après choix de la société de paiement, section 15).
 
