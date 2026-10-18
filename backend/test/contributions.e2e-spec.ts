@@ -382,4 +382,66 @@ describe('Cotisations, paiements en espèces et reçus (e2e)', () => {
       expect(dues[0].status).toBe('EXEMPT');
     });
   });
+
+  describe('inscription d’un membre arrivé après la création', () => {
+    it('ne reçoit que les échéances à venir, une seule fois', async () => {
+      const { president, group, plan } = await setup();
+      const late = await signUp(app, sms, 'Mamadou Camara');
+      const added = (
+        await http()
+          .post(`/groups/${group.id}/members`)
+          .set(president.auth)
+          .send({ phone: late.user.phone })
+          .expect(201)
+      ).body as { membershipId: string };
+      await http().post(`/groups/${group.id}/join`).set(late.auth).expect(200);
+
+      const res = await http()
+        .post(`/groups/${group.id}/plans/${plan.id}/enroll`)
+        .set(president.auth)
+        .send({ membershipIds: [added.membershipId], fromDate: '2027-02-01' })
+        .expect(200);
+      expect(res.body).toMatchObject({
+        enrolled: 1,
+        dueDatesPerMember: 2,
+        firstDueDate: '2027-02-05',
+      });
+
+      const dues = (
+        await http()
+          .get(`/groups/${group.id}/dues?membershipId=${added.membershipId}`)
+          .set(late.auth)
+          .expect(200)
+      ).body as DueBody[];
+      expect(dues.map((d) => [d.dueDate, d.amountDue])).toEqual([
+        ['2027-02-05', '50000'],
+        ['2027-03-05', '50000'],
+      ]);
+
+      await http()
+        .post(`/groups/${group.id}/plans/${plan.id}/enroll`)
+        .set(president.auth)
+        .send({ membershipIds: [added.membershipId] })
+        .expect(409);
+    });
+
+    it('refuse si la cotisation n’a plus d’échéance à venir', async () => {
+      const { president, group, plan, memberMembershipId } = await setup();
+      const extra = await signUp(app, sms, 'Retardataire');
+      const added = (
+        await http()
+          .post(`/groups/${group.id}/members`)
+          .set(president.auth)
+          .send({ phone: extra.user.phone })
+          .expect(201)
+      ).body as { membershipId: string };
+      await http().post(`/groups/${group.id}/join`).set(extra.auth).expect(200);
+      await http()
+        .post(`/groups/${group.id}/plans/${plan.id}/enroll`)
+        .set(president.auth)
+        .send({ membershipIds: [added.membershipId], fromDate: '2027-04-01' })
+        .expect(409);
+      expect(memberMembershipId).toBeDefined();
+    });
+  });
 });

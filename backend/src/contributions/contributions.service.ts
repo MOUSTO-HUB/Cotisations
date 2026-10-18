@@ -17,6 +17,7 @@ import {
   generateDueDates,
 } from './domain/contribution-rules';
 import { CreatePlanDto } from './dto/create-plan.dto';
+import { EnrollMembersDto } from './dto/enroll-members.dto';
 
 @Injectable()
 export class ContributionsService {
@@ -190,6 +191,109 @@ export class ContributionsService {
       outstanding: outstanding.toString(),
       lateCount: open.filter((d) => d.status === 'LATE').length,
       dues,
+    };
+  }
+
+  /**
+   * Inscrit des membres (souvent arrivés après la création) à une cotisation
+   * existante. Ils reçoivent les mêmes échéances que les autres, à partir de
+   * `fromDate` (aujourd'hui par défaut) : jamais les échéances passées.
+   */
+  async enrollMembers(
+    groupId: string,
+    actor: User,
+    planId: string,
+    dto: EnrollMembersDto,
+  ) {
+    await this.groups.requireMembership(groupId, actor.id, {
+      permission: 'group.update',
+    });
+    const plan = await this.prisma.contributionPlan.findFirst({
+      where: { id: planId, groupId },
+      include: { group: true },
+    });
+    if (!plan) throw new NotFoundException('Cotisation introuvable.');
+    if (dto.fromDate && !isValidDate(dto.fromDate)) {
+      throw new BadRequestException(`La date ${dto.fromDate} n'existe pas.`);
+    }
+    const fromDate = dto.fromDate ?? todayIn(plan.group.timezone);
+
+    const ids = [...new Set(dto.membershipIds)];
+    const active = await this.prisma.membership.findMany({
+      where: { id: { in: ids }, groupId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (active.length !== ids.length) {
+      throw new BadRequestException(
+        'Certains membres indiqués ne sont pas des membres actifs du groupe.',
+      );
+    }
+    const already = await this.prisma.due.findMany({
+      where: { planId, membershipId: { in: ids } },
+      distinct: ['membershipId'],
+      select: { membershipId: true },
+    });
+    if (already.length > 0) {
+      throw new ConflictException(
+        'Certains de ces membres sont déjà inscrits à cette cotisation.',
+      );
+    }
+
+    // Modèle d'échéancier : celui des membres déjà inscrits (montants
+    // éventuellement inégaux, ex. versements d'un projet) ou, à défaut,
+    // l'échéancier théorique du plan.
+    const existing = await this.prisma.due.groupBy({
+      by: ['dueDate', 'amountDue'],
+      where: { planId },
+      orderBy: { dueDate: 'asc' },
+    });
+    const template =
+      existing.length > 0
+        ? existing.map((d) => ({
+            dueDate: fromDbDate(d.dueDate),
+            amount: d.amountDue,
+          }))
+        : generateDueDates({
+            startDate: fromDbDate(plan.startDate),
+            endDate: plan.endDate ? fromDbDate(plan.endDate) : undefined,
+            periodicity: plan.periodicity ?? undefined,
+            intervalDays: plan.intervalDays ?? undefined,
+          }).map((dueDate) => ({ dueDate, amount: plan.amount }));
+    const upcoming = template.filter((t) => t.dueDate >= fromDate);
+    if (upcoming.length === 0) {
+      throw new ConflictException(
+        'Cette cotisation n’a plus d’échéance à venir à cette date.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.due.createMany({
+        data: ids.flatMap((membershipId) =>
+          upcoming.map((t) => ({
+            membershipId,
+            planId,
+            amountDue: t.amount,
+            dueDate: toDbDate(t.dueDate),
+          })),
+        ),
+      });
+      await this.audit.log(
+        {
+          groupId,
+          actorId: actor.id,
+          action: 'plan.members_enrolled',
+          entity: 'ContributionPlan',
+          entityId: planId,
+          data: { membershipIds: ids, fromDate, dueCount: upcoming.length },
+        },
+        tx,
+      );
+    });
+    return {
+      planId,
+      enrolled: ids.length,
+      dueDatesPerMember: upcoming.length,
+      firstDueDate: upcoming[0].dueDate,
     };
   }
 

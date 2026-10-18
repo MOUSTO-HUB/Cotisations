@@ -11,6 +11,7 @@ import {
 import { type AuthContext, CurrentAuth } from '../auth/auth-context';
 import { ContributionsService } from './contributions.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
+import { EnrollMembersDto } from './dto/enroll-members.dto';
 import { ReasonDto } from './dto/reason.dto';
 import { RecordCashPaymentDto } from './dto/record-cash-payment.dto';
 import { PaymentsService } from './payments.service';
@@ -62,6 +63,18 @@ export class ContributionsController {
     @Param('groupId', ParseUUIDPipe) groupId: string,
   ) {
     return this.contributions.myDues(groupId, auth.user.id);
+  }
+
+  /** Inscrire de nouveaux membres à une cotisation existante. */
+  @Post('plans/:planId/enroll')
+  @HttpCode(200)
+  enroll(
+    @CurrentAuth() auth: AuthContext,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Body() dto: EnrollMembersDto,
+  ) {
+    return this.contributions.enrollMembers(groupId, auth.user, planId, dto);
   }
 
   @Post('dues/:dueId/exempt')
