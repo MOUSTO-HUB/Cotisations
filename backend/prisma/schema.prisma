@@ -120,6 +120,18 @@ enum ExpenseStatus {
   REVERSED
 }
 
+enum SolidarityReason {
+  HEALTH // raison de santé — jamais de diagnostic
+  DEATH
+  DISASTER // sinistre : incendie, inondation…
+  OTHER
+}
+
+enum DonationStatus {
+  RECORDED
+  REVERSED
+}
+
 enum CampaignStatus {
   OPEN
   CLOSED
@@ -186,22 +198,24 @@ model Group {
   projects       Project[]
   campaigns      SolidarityCampaign[]
   expenses       Expense[]
+  donations      Donation[]
   auditLogs      AuditLog[]
 }
 
 model Membership {
-  id       String           @id @default(uuid())
-  userId   String
-  groupId  String
-  role     Role             @default(MEMBER)
-  category String? // résident, diaspora, retraité…
-  status   MembershipStatus @default(INVITED)
-  joinedAt DateTime         @default(now())
-  user     User             @relation(fields: [userId], references: [id])
-  group    Group            @relation(fields: [groupId], references: [id])
-  dues     Due[]
-  payments Payment[]
-  shares   TontineShare[]
+  id        String           @id @default(uuid())
+  userId    String
+  groupId   String
+  role      Role             @default(MEMBER)
+  category  String? // résident, diaspora, retraité…
+  status    MembershipStatus @default(INVITED)
+  joinedAt  DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id])
+  group     Group            @relation(fields: [groupId], references: [id])
+  dues      Due[]
+  payments  Payment[]
+  shares    TontineShare[]
+  donations Donation[]
 
   @@unique([userId, groupId])
 }
@@ -217,6 +231,7 @@ model Cashbox {
   movements Movement[]
   plans     ContributionPlan[]
   expenses  Expense[]
+  donations Donation[]
   project   Project?
   campaign  SolidarityCampaign?
 }
@@ -234,6 +249,7 @@ model Movement {
   receiptUrl   String?
   paymentId    String?           @unique
   expenseId    String?           @unique
+  donationId   String?           @unique
   reversalOfId String?           @unique
   reason       String?
   approvedById String? // second validateur (RG-D1)
@@ -241,6 +257,7 @@ model Movement {
   cashbox      Cashbox           @relation(fields: [cashboxId], references: [id])
   payment      Payment?          @relation(fields: [paymentId], references: [id])
   expense      Expense?          @relation(fields: [expenseId], references: [id])
+  donation     Donation?         @relation(fields: [donationId], references: [id])
   reversalOf   Movement?         @relation("Reversal", fields: [reversalOfId], references: [id])
   reversedBy   Movement?         @relation("Reversal")
 }
@@ -255,6 +272,7 @@ model Expense {
   category         String
   label            String
   justificationUrl String? // sans justificatif : « à justifier » (RG-D2)
+  budgetLineId     String?
   status           ExpenseStatus
   requestedById    String
   approvedById     String?
@@ -265,6 +283,7 @@ model Expense {
   decidedAt        DateTime?
   group            Group         @relation(fields: [groupId], references: [id])
   cashbox          Cashbox       @relation(fields: [cashboxId], references: [id])
+  budgetLine       BudgetLine?   @relation(fields: [budgetLineId], references: [id])
   movement         Movement?
 
   @@index([groupId, createdAt])
@@ -273,18 +292,22 @@ model Expense {
 // ---------- Cotisations ----------
 
 model ContributionPlan {
-  id           String       @id @default(uuid())
+  id           String              @id @default(uuid())
   groupId      String
   cashboxId    String
   name         String
   amount       BigInt
   periodicity  Periodicity?
   intervalDays Int?
-  startDate    DateTime     @db.Date
-  endDate      DateTime?    @db.Date
-  createdAt    DateTime     @default(now())
-  group        Group        @relation(fields: [groupId], references: [id])
-  cashbox      Cashbox      @relation(fields: [cashboxId], references: [id])
+  startDate    DateTime            @db.Date
+  endDate      DateTime?           @db.Date
+  projectId    String?             @unique
+  campaignId   String?             @unique
+  createdAt    DateTime            @default(now())
+  group        Group               @relation(fields: [groupId], references: [id])
+  cashbox      Cashbox             @relation(fields: [cashboxId], references: [id])
+  project      Project?            @relation(fields: [projectId], references: [id])
+  campaign     SolidarityCampaign? @relation(fields: [campaignId], references: [id])
   dues         Due[]
   payments     Payment[]
 }
@@ -388,34 +411,95 @@ model TontineRound {
 // ---------- Projets et solidarité ----------
 
 model Project {
-  id           String        @id @default(uuid())
-  groupId      String
-  cashboxId    String        @unique
-  title        String
-  description  String
-  budget       Json          @default("[]") // postes : [{ label, amount }]
-  targetAmount BigInt
-  status       ProjectStatus @default(PROPOSED)
-  deadline     DateTime?     @db.Date
-  createdAt    DateTime      @default(now())
-  group        Group         @relation(fields: [groupId], references: [id])
-  cashbox      Cashbox       @relation(fields: [cashboxId], references: [id])
+  id             String            @id @default(uuid())
+  groupId        String
+  cashboxId      String            @unique
+  title          String
+  description    String
+  budget         Json              @default("[]") // obsolète : remplacé par BudgetLine
+  /// Objectif de collecte = budget − fonds affectés − subventions.
+  targetAmount   BigInt            @default(0)
+  allocatedFunds BigInt            @default(0) // fonds déjà en caisse affectés au projet
+  subsidies      BigInt            @default(0) // subventions ou dons annoncés
+  status         ProjectStatus     @default(PROPOSED)
+  deadline       DateTime?         @db.Date
+  proposedById   String
+  approvedById   String?
+  approvedAt     DateTime?
+  completedAt    DateTime?
+  cancelReason   String?
+  createdAt      DateTime          @default(now())
+  group          Group             @relation(fields: [groupId], references: [id])
+  cashbox        Cashbox           @relation(fields: [cashboxId], references: [id])
+  budgetLines    BudgetLine[]
+  updates        ProjectUpdate[]
+  plan           ContributionPlan?
+}
+
+/// Poste du budget d'un projet (matériaux, main-d'œuvre, transport, imprévus).
+model BudgetLine {
+  id            String    @id @default(uuid())
+  projectId     String
+  position      Int
+  label         String
+  plannedAmount BigInt
+  project       Project   @relation(fields: [projectId], references: [id])
+  expenses      Expense[]
+}
+
+/// Jalon d'avancement d'un projet, avec photo éventuelle.
+model ProjectUpdate {
+  id        String   @id @default(uuid())
+  projectId String
+  authorId  String
+  title     String
+  note      String?
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+}
+
+/// Don libre (membre, ressortissant ou donateur extérieur), avec reçu.
+model Donation {
+  id             String         @id @default(uuid())
+  groupId        String
+  cashboxId      String
+  membershipId   String?
+  donorName      String
+  amount         BigInt
+  channel        PaymentChannel
+  status         DonationStatus @default(RECORDED)
+  receiptNumber  String         @unique
+  idempotencyKey String         @unique
+  recordedById   String
+  reversalReason String?
+  createdAt      DateTime       @default(now())
+  group          Group          @relation(fields: [groupId], references: [id])
+  cashbox        Cashbox        @relation(fields: [cashboxId], references: [id])
+  membership     Membership?    @relation(fields: [membershipId], references: [id])
+  movement       Movement?
 }
 
 model SolidarityCampaign {
-  id              String         @id @default(uuid())
-  groupId         String
-  cashboxId       String         @unique
-  beneficiaryName String
-  reason          String // motif général uniquement, jamais de diagnostic
-  targetAmount    BigInt
-  suggestedAmount BigInt?
-  deadline        DateTime       @db.Date
-  status          CampaignStatus @default(OPEN)
-  openedById      String
-  createdAt       DateTime       @default(now())
-  group           Group          @relation(fields: [groupId], references: [id])
-  cashbox         Cashbox        @relation(fields: [cashboxId], references: [id])
+  id                      String            @id @default(uuid())
+  groupId                 String
+  cashboxId               String            @unique
+  beneficiaryName         String
+  reason                  String // motif général uniquement, jamais de diagnostic
+  reasonCategory          SolidarityReason  @default(OTHER)
+  beneficiaryMembershipId String?
+  targetAmount            BigInt
+  suggestedAmount         BigInt?
+  /// RG-S4 : cotisation obligatoire (échéance pour chaque membre) ou volontaire.
+  mandatory               Boolean           @default(false)
+  deadline                DateTime          @db.Date
+  status                  CampaignStatus    @default(OPEN)
+  openedById              String
+  closedAt                DateTime?
+  createdAt               DateTime          @default(now())
+  group                   Group             @relation(fields: [groupId], references: [id])
+  cashbox                 Cashbox           @relation(fields: [cashboxId], references: [id])
+  plan                    ContributionPlan?
 }
 
 // ---------- Audit ----------

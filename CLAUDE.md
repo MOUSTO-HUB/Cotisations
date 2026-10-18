@@ -54,6 +54,10 @@ npm run lint
 - Migrations : `npx prisma migrate dev --name <nom>` ; si Prisma refuse (« non-interactive », à cause d'un avertissement), générer le SQL avec `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` dans `prisma/migrations/<horodatage>_<nom>/migration.sql`, le relire (aucun DROP sans accord), puis `npx prisma migrate deploy` et `npx prisma generate`.
 - Configuration commune de l'API (validation, filtre d'erreurs Prisma) dans `src/app.setup.ts` (`configureApp`), utilisée par `main.ts` et les tests e2e.
 - Règles financières d'un groupe (délai de grâce, seuil de double validation) : `readGroupRules` dans `src/groups/domain/group-rules.ts`, jamais lues directement depuis le JSON.
+- Les SMS et notifications passent par `NotificationsService` (module global `notifications`, qui fournit aussi `SmsSender`). Un échec d'envoi n'annule jamais l'action.
+- Caisses de projet et de collecte : `CashboxService.summary` (collecté / dépensé / transféré, contre-écritures neutralisées) et `CashboxService.transfer` (reliquat RG-D4, excédent RG-S3). Les versements d'une collecte passent par les dépenses, toujours en double validation (RG-S1).
+- Scripts de modification de fichiers : les écrire dans un fichier .js du dossier scratchpad plutôt qu'en `node -e` (les backticks se cassent dans le shell).
+- Le serveur de développement verrouille le client Prisma sous Windows : l'arrêter avant `npx prisma generate`.
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
@@ -64,7 +68,8 @@ npm run lint
 4. Groupes, membres et rôles (invitation, membres sans smartphone, au moins un président, audit). ✅
 5. Cotisations, échéances, paiements en espèces, reçus, confirmation / contestation, annulation par contre-écriture, solde des caisses. ✅
 6. Caisses, mouvements, double validation, journal d'audit (dépenses, seuil par groupe, justificatifs, contre-écritures, consultation de l'audit). ✅
-7. Projets budgétés et collectes de solidarité.
+7. Projets budgétés et collectes de solidarité (6 étapes, postes, part par membre, dons, jalons, reliquat, collectes avec second validateur, excédent). ✅
+7 bis. Tontine complète en base : création du cycle, tirage enregistré, versements de chaque tour, versement du pot et confirmation du bénéficiaire, ordre fixé / tirage / enchères, échanges de tour.
 8. Application mobile Flutter.
 9. Paiement Mobile Money (après choix de la société de paiement, section 15).
 

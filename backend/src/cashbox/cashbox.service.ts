@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { summarizeMovements } from './cashbox-summary';
 
 @Injectable()
 export class CashboxService {
@@ -98,5 +99,50 @@ export class CashboxService {
     const sum = (direction: 'IN' | 'OUT') =>
       sums.find((s) => s.direction === direction)?._sum.amount ?? 0n;
     return sum('IN') - sum('OUT');
+  }
+
+  /** Résumé collecté / dépensé / transféré d'une caisse (contre-écritures neutralisées). */
+  async summary(cashboxId: string) {
+    const movements = await this.prisma.movement.findMany({
+      where: { cashboxId },
+      select: { direction: true, amount: true, category: true },
+    });
+    return summarizeMovements(movements);
+  }
+
+  /**
+   * Transfert entre deux caisses du même groupe : une sortie et une entrée
+   * de catégorie « transfer », dans la transaction de l'appelant.
+   */
+  async transfer(
+    tx: Prisma.TransactionClient,
+    params: {
+      fromCashboxId: string;
+      toCashboxId: string;
+      amount: bigint;
+      label: string;
+      authorId: string;
+    },
+  ) {
+    await tx.movement.create({
+      data: {
+        cashboxId: params.fromCashboxId,
+        direction: 'OUT',
+        amount: params.amount,
+        category: 'transfer',
+        label: params.label,
+        authorId: params.authorId,
+      },
+    });
+    await tx.movement.create({
+      data: {
+        cashboxId: params.toCashboxId,
+        direction: 'IN',
+        amount: params.amount,
+        category: 'transfer',
+        label: params.label,
+        authorId: params.authorId,
+      },
+    });
   }
 }

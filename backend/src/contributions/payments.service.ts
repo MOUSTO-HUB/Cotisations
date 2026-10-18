@@ -9,6 +9,7 @@ import { Prisma, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { fromDbDate } from '../common/calendar';
 import { parseAmount } from '../common/money';
+import { nextReceiptNumber } from '../common/receipt-number';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -101,11 +102,7 @@ export class PaymentsService {
         throw error;
       }
 
-      const group = await tx.group.update({
-        where: { id: groupId },
-        data: { receiptCounter: { increment: 1 } },
-      });
-      const receiptNumber = formatReceiptNumber(groupId, group.receiptCounter);
+      const receiptNumber = await nextReceiptNumber(tx, groupId);
 
       const created = await tx.payment.create({
         data: {
@@ -351,12 +348,6 @@ export class PaymentsService {
     }
     return payment;
   }
-}
-
-/** Ex. « R-3F2A9C1E-000042 » : préfixe du groupe + compteur du groupe. */
-function formatReceiptNumber(groupId: string, counter: number): string {
-  const prefix = groupId.replace(/-/g, '').slice(0, 8).toUpperCase();
-  return `R-${prefix}-${String(counter).padStart(6, '0')}`;
 }
 
 function toReceipt(p: PaymentWithDetails) {

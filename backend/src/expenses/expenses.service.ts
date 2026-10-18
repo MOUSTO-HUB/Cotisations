@@ -15,6 +15,7 @@ import {
 } from '../groups/domain/group-rules';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SPENDING_STATUSES } from '../projects/domain/project-rules';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 
 @Injectable()
@@ -55,11 +56,41 @@ export class ExpensesService {
 
     const cashbox = await this.prisma.cashbox.findFirst({
       where: { id: dto.cashboxId, groupId },
-      include: { group: true },
+      include: { group: true, project: true, campaign: true },
     });
     if (!cashbox) throw new NotFoundException('Caisse introuvable.');
+
+    // Caisse d'un projet : dépenses seulement pendant la collecte ou la
+    // réalisation, rattachables à un poste du budget.
+    if (
+      cashbox.project &&
+      !SPENDING_STATUSES.includes(cashbox.project.status)
+    ) {
+      throw new ConflictException(
+        'Ce projet ne peut pas engager de dépense à ce stade.',
+      );
+    }
+    if (dto.budgetLineId) {
+      const line = cashbox.project
+        ? await this.prisma.budgetLine.findFirst({
+            where: { id: dto.budgetLineId, projectId: cashbox.project.id },
+          })
+        : null;
+      if (!line) {
+        throw new BadRequestException(
+          "Ce poste budgétaire n'appartient pas au projet de cette caisse.",
+        );
+      }
+    }
+    if (cashbox.campaign?.status === 'PAID_OUT') {
+      throw new ConflictException('Cette collecte est entièrement versée.');
+    }
+
     const rules = readGroupRules(cashbox.group.rules, cashbox.group.currency);
-    const pending = needsSecondApproval(amount, rules);
+    // RG-S1 : tout versement d'une collecte de solidarité exige un second
+    // validateur, quel que soit le montant.
+    const pending =
+      cashbox.campaign !== null || needsSecondApproval(amount, rules);
 
     const expense = await this.prisma.$transaction(async (tx) => {
       // Solde vérifié dès la saisie, puis de nouveau à la validation.
@@ -72,6 +103,7 @@ export class ExpensesService {
           category: dto.category.trim(),
           label: dto.label.trim(),
           justificationUrl: dto.justificationUrl,
+          budgetLineId: dto.budgetLineId,
           status: pending ? 'PENDING_APPROVAL' : 'EXECUTED',
           requestedById: actor.id,
           idempotencyKey: dto.idempotencyKey,
@@ -331,6 +363,7 @@ function toExpenseView(e: Expense) {
     label: e.label,
     status: e.status,
     justificationUrl: e.justificationUrl,
+    budgetLineId: e.budgetLineId,
     /** RG-D2 : exécutée sans justificatif, signalée dans les rapports. */
     toJustify: e.status === 'EXECUTED' && !e.justificationUrl,
     requestedById: e.requestedById,

@@ -25,6 +25,11 @@ export class CreateExpenseDto {
   @Length(3, 200)
   label!: string;
 
+  /** Poste du budget du projet auquel la dépense est rattachée. */
+  @IsOptional()
+  @IsUUID()
+  budgetLineId?: string;
+
   /** Lien vers la photo de la facture ou du devis (RG-D2). */
   @IsOptional()
   @IsUrl({ require_protocol: true })
