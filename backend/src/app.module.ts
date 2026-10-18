@@ -14,6 +14,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { SolidarityModule } from './solidarity/solidarity.module';
 import { TontinesModule } from './tontines/tontines.module';
 import { UsersModule } from './users/users.module';
+import { VotesModule } from './votes/votes.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     DonationsModule,
     ProjectsModule,
     SolidarityModule,
+    VotesModule,
     AuditReadModule,
     TontinesModule,
   ],

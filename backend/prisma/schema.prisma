@@ -141,6 +141,11 @@ enum DonationStatus {
   REVERSED
 }
 
+enum VoteStatus {
+  OPEN
+  CLOSED
+}
+
 enum CampaignStatus {
   OPEN
   CLOSED
@@ -207,6 +212,7 @@ model Group {
   projects       Project[]
   campaigns      SolidarityCampaign[]
   expenses       Expense[]
+  votes          Vote[]
   donations      Donation[]
   auditLogs      AuditLog[]
 }
@@ -225,6 +231,7 @@ model Membership {
   payments  Payment[]
   shares    TontineShare[]
   donations Donation[]
+  ballots   Ballot[]
 
   @@unique([userId, groupId])
 }
@@ -480,6 +487,7 @@ model Project {
   budgetLines    BudgetLine[]
   updates        ProjectUpdate[]
   plan           ContributionPlan?
+  votes          Vote[]
 }
 
 /// Poste du budget d'un projet (matériaux, main-d'œuvre, transport, imprévus).
@@ -546,6 +554,42 @@ model SolidarityCampaign {
   group                   Group             @relation(fields: [groupId], references: [id])
   cashbox                 Cashbox           @relation(fields: [cashboxId], references: [id])
   plan                    ContributionPlan?
+}
+
+// ---------- Votes ----------
+
+/// Vote ou sondage du groupe (section 4.7). Bulletin secret : on sait qui a
+/// voté, jamais pour quoi.
+model Vote {
+  id            String     @id @default(uuid())
+  groupId       String
+  question      String
+  options       Json // libellés des options : ["Pour", "Contre"]
+  quorumPercent Int        @default(50)
+  closesAt      DateTime
+  status        VoteStatus @default(OPEN)
+  projectId     String? // vote de validation d'un projet
+  createdById   String
+  closedAt      DateTime?
+  result        Json? // décompte figé à la clôture
+  createdAt     DateTime   @default(now())
+  group         Group      @relation(fields: [groupId], references: [id])
+  project       Project?   @relation(fields: [projectId], references: [id])
+  ballots       Ballot[]
+
+  @@index([groupId, createdAt])
+}
+
+model Ballot {
+  id           String     @id @default(uuid())
+  voteId       String
+  membershipId String
+  optionIndex  Int
+  createdAt    DateTime   @default(now())
+  vote         Vote       @relation(fields: [voteId], references: [id])
+  membership   Membership @relation(fields: [membershipId], references: [id])
+
+  @@unique([voteId, membershipId])
 }
 
 // ---------- Audit ----------

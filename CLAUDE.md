@@ -58,6 +58,8 @@ npm run lint
 - Caisses de projet et de collecte : `CashboxService.summary` (collecté / dépensé / transféré, contre-écritures neutralisées) et `CashboxService.transfer` (reliquat RG-D4, excédent RG-S3). Les versements d'une collecte passent par les dépenses, toujours en double validation (RG-S1).
 - Scripts de modification de fichiers : les écrire dans un fichier .js du dossier scratchpad plutôt qu'en `node -e` (les backticks se cassent dans le shell).
 - Le serveur de développement verrouille le client Prisma sous Windows : l'arrêter avant `npx prisma generate`.
+- Votes : bulletin secret (l'API expose qui a voté, jamais pour quoi) ; clôture automatique à la date prévue, faite à la lecture (`closeDueVotes`) ; un vote de projet gagné par l'option 0 (« Pour ») fait passer le projet de BUDGETED à VOTED.
+- Pénalités : une échéance supplémentaire liée par `penaltyOfId` (unique) à l'échéance en retard ; jamais de pénalité sur une pénalité.
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
@@ -70,6 +72,7 @@ npm run lint
 6. Caisses, mouvements, double validation, journal d'audit (dépenses, seuil par groupe, justificatifs, contre-écritures, consultation de l'audit). ✅
 7. Projets budgétés et collectes de solidarité (6 étapes, postes, part par membre, dons, jalons, reliquat, collectes avec second validateur, excédent). ✅
 7 bis. Tontine complète en base : création du cycle, tirage enregistré, versements de chaque tour, versement du pot et confirmation du bénéficiaire, ordre fixé / tirage / enchères, échanges de tour. ✅ (enchères, demi-parts, sortie anticipée et caution : plus tard)
+7 ter. Compléments API : inscription tardive aux cotisations, pénalités de retard et alertes (RG-P1 à P3), votes à bulletin secret avec quorum (validation des projets par vote). ✅
 8. Application mobile Flutter.
 9. Paiement Mobile Money (après choix de la société de paiement, section 15).
 
