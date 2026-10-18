@@ -22,7 +22,11 @@ import {
   normalizePhone,
 } from '../common/phone';
 import { PrismaService } from '../prisma/prisma.service';
-import { readGroupRules, serializeGroupRules } from './domain/group-rules';
+import {
+  GroupRules,
+  readGroupRules,
+  serializeGroupRules,
+} from './domain/group-rules';
 import { hasPermission, Permission } from './domain/permissions';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -340,13 +344,30 @@ export class GroupsService {
         where: { id: groupId },
       });
       const before = readGroupRules(group.rules, group.currency);
-      const after = {
+      const penaltyMode = dto.penaltyMode ?? before.penaltyMode;
+      const after: GroupRules = {
         graceDays: dto.graceDays ?? before.graceDays,
         expenseApprovalThreshold:
           dto.expenseApprovalThreshold !== undefined
             ? BigInt(dto.expenseApprovalThreshold)
             : before.expenseApprovalThreshold,
+        penaltyMode,
+        penaltyValue:
+          penaltyMode === 'NONE'
+            ? 0n
+            : dto.penaltyValue !== undefined
+              ? BigInt(dto.penaltyValue)
+              : before.penaltyValue,
+        lateAlertThreshold: dto.lateAlertThreshold ?? before.lateAlertThreshold,
       };
+      if (penaltyMode !== 'NONE' && after.penaltyValue <= 0n) {
+        throw new BadRequestException('Indiquez le montant de la pénalité.');
+      }
+      if (penaltyMode === 'PERCENT' && after.penaltyValue > 100n) {
+        throw new BadRequestException(
+          'Une pénalité en pourcentage ne peut pas dépasser 100 %.',
+        );
+      }
       await tx.group.update({
         where: { id: groupId },
         data: { rules: serializeGroupRules(after) },

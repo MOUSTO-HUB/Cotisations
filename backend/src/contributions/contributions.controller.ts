@@ -15,6 +15,7 @@ import { EnrollMembersDto } from './dto/enroll-members.dto';
 import { ReasonDto } from './dto/reason.dto';
 import { RecordCashPaymentDto } from './dto/record-cash-payment.dto';
 import { PaymentsService } from './payments.service';
+import { PenaltiesService } from './penalties.service';
 
 const uuid = new ParseUUIDPipe({ optional: true });
 
@@ -23,6 +24,7 @@ export class ContributionsController {
   constructor(
     private readonly contributions: ContributionsService,
     private readonly payments: PaymentsService,
+    private readonly penalties: PenaltiesService,
   ) {}
 
   // ---- Cotisations et échéances ----
@@ -75,6 +77,25 @@ export class ContributionsController {
     @Body() dto: EnrollMembersDto,
   ) {
     return this.contributions.enrollMembers(groupId, auth.user, planId, dto);
+  }
+
+  /** RG-P2 : applique les pénalités de retard (sans doublon). */
+  @Post('penalties/apply')
+  @HttpCode(200)
+  applyPenalties(
+    @CurrentAuth() auth: AuthContext,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.penalties.apply(groupId, auth.user);
+  }
+
+  /** RG-P3 : membres ayant atteint le seuil de retards (bureau). */
+  @Get('alerts')
+  alerts(
+    @CurrentAuth() auth: AuthContext,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.penalties.alerts(groupId, auth.user.id);
   }
 
   @Post('dues/:dueId/exempt')

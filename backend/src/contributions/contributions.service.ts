@@ -170,6 +170,8 @@ export class ContributionsService {
         graceDays,
       ),
       exemptReason: d.exemptReason,
+      /** RG-P2 : pénalité de retard, liée à l'échéance d'origine. */
+      penaltyOfId: d.penaltyOfId,
     }));
   }
 

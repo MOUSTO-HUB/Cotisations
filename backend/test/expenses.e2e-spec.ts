@@ -183,6 +183,9 @@ describe('Dépenses, double validation, journal et audit (e2e)', () => {
       expect(rules.body).toEqual({
         graceDays: 5,
         expenseApprovalThreshold: '100000',
+        penaltyMode: 'NONE',
+        penaltyValue: '0',
+        lateAlertThreshold: 3,
       });
       const expense = (await spend('150000')).body as ExpenseBody;
       expect(expense.status).toBe('PENDING_APPROVAL');

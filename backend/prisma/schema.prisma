@@ -332,10 +332,14 @@ model Due {
   dueDate      DateTime            @db.Date
   status       DueStatus           @default(PENDING)
   exemptReason String?
+  /// Pénalité de retard (RG-P2) : échéance d'origine, une seule pénalité par retard.
+  penaltyOfId  String?             @unique
   membership   Membership          @relation(fields: [membershipId], references: [id])
   plan         ContributionPlan?   @relation(fields: [planId], references: [id])
   round        TontineRound?       @relation(fields: [roundId], references: [id])
   allocations  PaymentAllocation[]
+  penaltyOf    Due?                @relation("Penalty", fields: [penaltyOfId], references: [id])
+  penalty      Due?                @relation("Penalty")
 
   @@index([membershipId, dueDate])
 }
