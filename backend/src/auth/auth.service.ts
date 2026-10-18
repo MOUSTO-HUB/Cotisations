@@ -64,7 +64,12 @@ export class AuthService {
       `Votre code Cotisations : ${code}. Il expire dans 5 minutes. Ne le partagez avec personne.`,
     );
 
-    return { phone, expiresInSeconds: OTP_TTL_MS / 1000 };
+    return {
+      phone,
+      expiresInSeconds: OTP_TTL_MS / 1000,
+      // Développement uniquement : renvoie le code pour tester sans SMS.
+      ...(devCodeEchoEnabled() ? { devCode: code } : {}),
+    };
   }
 
   async verifyOtp(input: {
@@ -159,4 +164,11 @@ export class AuthService {
       throw error;
     }
   }
+}
+
+/** OTP_DEV_ECHO=true renvoie le code dans la réponse ; jamais en production. */
+function devCodeEchoEnabled(): boolean {
+  return (
+    process.env.OTP_DEV_ECHO === 'true' && process.env.NODE_ENV !== 'production'
+  );
 }

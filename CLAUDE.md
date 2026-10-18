@@ -18,7 +18,7 @@ docker compose up -d                 # démarre PostgreSQL (port 5433)
 cd backend
 npm install
 npx prisma migrate dev               # applique les migrations
-npm run start:dev                    # API sur http://localhost:3000
+npm run start:dev                    # API sur http://localhost:3000, documentation interactive sur /docs
 npm test                             # tests unitaires
 npm run test:e2e                     # tests bout en bout
 npm run lint
@@ -44,6 +44,8 @@ npm run lint
 - Toutes les routes exigent une session (garde globale `AuthGuard`) ; une route publique se marque `@Public()`. L'utilisateur connecté s'obtient avec `@CurrentAuth()`.
 - Sessions : jeton opaque aléatoire (`Authorization: Bearer <jeton>`), seule son empreinte SHA-256 est stockée, révocable à la déconnexion. Pas de JWT.
 - Numéros de téléphone toujours passés par `normalizePhone` (format E.164, Guinée par défaut).
+- En développement, `OTP_DEV_ECHO=true` dans `backend/.env` renvoie le code SMS dans la réponse (`devCode`) ; ignoré si `NODE_ENV=production`, forcé à `false` dans les tests.
+- Swagger (`@nestjs/swagger` v11, compatible NestJS 11) : les formulaires sont déduits des DTO par le plugin déclaré dans `nest-cli.json`.
 - Le SMS passe par l'abstraction `SmsSender` ; en développement, `ConsoleSmsSender` affiche le code dans la console de l'API.
 - Tests e2e : base dédiée `cotisations_test` (port 5433), jamais effacée ; chaque test crée ses propres données (numéros aléatoires). Ne jamais lancer `prisma migrate reset` ni supprimer de données sans l'accord explicite de l'utilisateur.
 - Montants dans l'API : toujours des chaînes d'entiers (`"50000"`), via `AMOUNT_PATTERN` / `parseAmount` (`src/common/money.ts`).
