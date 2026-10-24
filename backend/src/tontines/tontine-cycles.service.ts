@@ -770,6 +770,7 @@ export class TontineCyclesService {
                 shareId: r.beneficiary.id,
                 membershipId: r.beneficiary.membershipId,
                 memberName: r.beneficiary.membership.user.fullName,
+                userId: r.beneficiary.membership.userId,
               }
             : null,
           status: roundStatus(
