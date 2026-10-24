@@ -25,6 +25,6 @@ L'API répond sur http://localhost:3400 (point de santé : `GET /health`).
 | Dossier | Contenu | État |
 | --- | --- | --- |
 | `backend/` | API NestJS + Prisma + PostgreSQL | En cours |
-| `mobile/` | Application Flutter | À venir |
+| `mobile/` | Application Flutter (voir [mobile/README.md](mobile/README.md)) | En cours |
 | `web/` | Application web trésorier (Next.js) | Lot 2 |
 | `docs/` | Cahier des charges et décisions | |

@@ -7,7 +7,7 @@ Le cahier des charges complet est dans [docs/cahier-des-charges.md](docs/cahier-
 ## Stack
 
 - `backend/` : API NestJS (TypeScript, Node.js 24), Prisma, PostgreSQL 16, tests Jest.
-- `mobile/` : application Flutter (pas encore créée — Flutter n'est pas installé sur le poste).
+- `mobile/` : application Flutter (Dart), paquets `http` et `shared_preferences` seulement. Flutter 3.47.8 est installé dans `C:\src\flutter` (pas dans le PATH : utiliser `/c/src/flutter/bin/flutter`).
 - `web/` : application web trésorier en Next.js (lot 2, pas encore créée).
 - `docker-compose.yml` à la racine : PostgreSQL local.
 
@@ -22,6 +22,12 @@ npm run start:dev                    # API sur http://localhost:3400, documentat
 npm test                             # tests unitaires
 npm run test:e2e                     # tests bout en bout
 npm run lint
+
+cd mobile
+/c/src/flutter/bin/flutter pub get
+/c/src/flutter/bin/flutter run -d web-server --web-port 3401   # application sur http://localhost:3401
+/c/src/flutter/bin/flutter test
+/c/src/flutter/bin/flutter analyze
 ```
 
 ## Règles non négociables
@@ -60,6 +66,7 @@ npm run lint
 - Le serveur de développement verrouille le client Prisma sous Windows : l'arrêter avant `npx prisma generate`.
 - Votes : bulletin secret (l'API expose qui a voté, jamais pour quoi) ; clôture automatique à la date prévue, faite à la lecture (`closeDueVotes`) ; un vote de projet gagné par l'option 0 (« Pour ») fait passer le projet de BUDGETED à VOTED.
 - Pénalités : une échéance supplémentaire liée par `penaltyOfId` (unique) à l'échéance en retard ; jamais de pénalité sur une pénalité.
+- Application mobile : textes en français, montants toujours en chaînes formatées par `formatMoney` (jamais de `double`), adresse de l'API via `--dart-define=API_URL=...` (par défaut http://localhost:3400 ; émulateur Android : http://10.0.2.2:3400).
 - Commits au format conventionnel (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), en français ou en anglais, une fonctionnalité par commit.
 
 ## Ordre de développement (section 16 du cahier des charges)
@@ -73,7 +80,7 @@ npm run lint
 7. Projets budgétés et collectes de solidarité (6 étapes, postes, part par membre, dons, jalons, reliquat, collectes avec second validateur, excédent). ✅
 7 bis. Tontine complète en base : création du cycle, tirage enregistré, versements de chaque tour, versement du pot et confirmation du bénéficiaire, ordre fixé / tirage / enchères, échanges de tour. ✅ (enchères, demi-parts, sortie anticipée et caution : plus tard)
 7 ter. Compléments API : inscription tardive aux cotisations, pénalités de retard et alertes (RG-P1 à P3), votes à bulletin secret avec quorum (validation des projets par vote). ✅
-8. Application mobile Flutter.
+8. Application mobile Flutter. 🚧 Fait : connexion SMS, mes groupes (création, invitations), mes échéances et confirmation / contestation des paiements, caisses et journal, membres, calendrier des tontines et confirmation de réception du pot, saisie d'un paiement en espèces (trésorier). Reste : écrans du bureau (cotisations, dépenses, projets, solidarité, votes), mode hors-ligne, build Android.
 9. Paiement Mobile Money (après choix de la société de paiement, section 15).
 
 Mettre à jour cette liste (✅) quand une étape est terminée.
